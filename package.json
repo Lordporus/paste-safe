@@ -5,7 +5,7 @@
   "license": "MIT",
   "type": "module",
   "bin": {
-    "paste-safe": "./dist/cli.js"
+    "paste-safe": "dist/cli.js"
   },
   "files": [
     "dist",
