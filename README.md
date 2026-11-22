@@ -6,16 +6,28 @@
 [![CI](https://github.com/Lordporus/paste-safe/actions/workflows/ci.yml/badge.svg)](https://github.com/Lordporus/paste-safe/actions/workflows/ci.yml)
 ![Zero Network](https://img.shields.io/badge/network-zero-brightgreen)
 
-<!-- demo.gif: record the 3-second quickstart here (asciinema/vhs) and uncomment the image below. -->
-<!-- ![demo](./demo.gif) -->
+![paste-safe demo](./demo.gif)
+
+## Install
+
+```bash
+npx paste-safe          # run without installing
+npm install -g paste-safe
+```
+
+`pnpm dlx paste-safe` and `bunx paste-safe` work the same way.
+
+**Requirements:** Node.js 20 or newer. macOS, Linux, and Windows are supported.
 
 ## Quickstart
 
+Copy anything risky, then:
+
 ```bash
-npx paste-safe
+paste-safe
 ```
 
-Copy anything risky. Run it. Paste safely.
+The clipboard is replaced with the sanitized text, and the placeholder → original map is saved so you can undo it. Paste anywhere.
 
 ## Before / After
 
@@ -46,13 +58,6 @@ paste-safe restore
 
 Placeholders are numbered across runs (`<EMAIL_1>`, `<EMAIL_2>`, …) and the vault merges them, so every text you sanitized in the last 60 minutes restores correctly. If you paste text the current vault did not produce, `restore` refuses instead of guessing — pass `--force` to override.
 
-## Security & Trust
-
-- **100% offline.** No network calls, no telemetry, no accounts. Detection is deterministic regex matching, nothing is sent anywhere.
-- **Auto-expiring vault.** The placeholder → original map lives at `~/.paste-safe/last-map.json` with `0o600` file / `0o700` directory permissions and a **60 minute** TTL. On expiry it deletes itself.
-- **Zero-disk mode.** `paste-safe --no-vault` never writes the mapping; redaction is one-way.
-- **Preview-safe.** `--dry-run` only ever prints masked values (`sk_l...UvWx`), so your shell history stays clean.
-
 ## Commands
 
 | Command | What it does |
@@ -65,22 +70,38 @@ Placeholders are numbered across runs (`<EMAIL_1>`, `<EMAIL_2>`, …) and the va
 
 ## Flags
 
-| Flag | Effect |
-| --- | --- |
-| `--dry-run` | Preview detections with masked values; writes nothing, to clipboard or disk. |
-| `--no-pii` | Redact secrets only; keep emails and IPs. |
-| `--no-vault` | One-way redaction; never touch disk. |
-| `--check` | Exit `1` when anything is detected, `0` when clean. |
-| `--json` | Structured JSON summary (counts + masked previews + the sanitized `output`); stdout stays pure JSON. |
-| `--stdin` | Force reading stdin and writing stdout. |
+| Flag | Applies to | Effect |
+| --- | --- | --- |
+| `--dry-run` | all | Preview detections with masked values; writes nothing, to clipboard or disk. |
+| `--no-pii` | all | Redact secrets only; keep emails and IPs. |
+| `--no-vault` | all | One-way redaction; never touch disk. |
+| `--check` | sanitize | Report only. Never writes the clipboard, stdout, or the vault; exits `1` when anything is detected. |
+| `--json` | sanitize | Structured JSON summary (counts + masked previews + the sanitized `output`); stdout stays pure JSON. |
+| `--stdin` | all | Force reading stdin and writing stdout. |
+| `--force` | `restore` | Restore even if the text was not produced by the current vault. |
 
-Piping is auto-detected, so `cat error.log | paste-safe` just works. In that mode the sanitized text goes to stdout and the summary to stderr, keeping pipelines clean.
+Piping is auto-detected, so `cat error.log | paste-safe` just works. In that mode the sanitized text goes to stdout and the summary to stderr, keeping pipelines clean and byte-exact.
+
+### Exit codes
+
+| Code | Meaning |
+| --- | --- |
+| `0` | Success. With `--check`, nothing was detected. |
+| `1` | With `--check`, something was detected — or the run failed (bad config, no clipboard backend, unreadable vault). |
 
 ### Pre-commit example
 
 ```bash
 git diff --cached | paste-safe --check --no-vault --stdin
 ```
+
+### Watch mode
+
+```bash
+paste-safe watch
+```
+
+Every 500ms the clipboard is read, and anything detected is replaced in place, with a timestamped line printed for each change. Ctrl+C stops it. Because each tick launches the platform clipboard helper, `watch` is not free — run it while you work, not permanently.
 
 ## What gets detected
 
@@ -98,6 +119,21 @@ Higher-priority rules claim their span first, so a database URI containing an IP
 
 Known-safe values are ignored: `127.0.0.1`, `0.0.0.0`, `localhost`, semver (`v1.2.3`), `example.com` emails, and obvious placeholders (`YOUR_API_KEY`, `changeme`, `xxx`, `<REDACTED>`).
 
+## Limitations
+
+Detection is regex-based and deliberately conservative. It does **not** catch:
+
+- **IPv6 addresses.**
+- **JSON-style pairs** — `"password": "hunter2"` is not matched. `.env`-style `PASSWORD=hunter2` is.
+- **Secrets with no recognizable shape** — a random 12-character string that looks like a word is left alone. Add a `customRules` pattern if you need it.
+- **Secrets split across lines** or embedded in images, archives, or binary files.
+
+Other limits worth knowing:
+
+- Restore works for **60 minutes after the last sanitize** (the TTL restarts on every run), and the vault remembers the last **20** sanitized texts. Older texts can still be restored with `--force`, which skips the fingerprint check.
+- File permissions (`0o600` file, `0o700` directory) are applied on macOS and Linux. Windows has no equivalent, so the vault is protected by your user profile ACL only.
+- `watch` polls every 500ms; a clipboard change made in that window is picked up on the next tick.
+
 ## Configuration
 
 `paste-safe` reads `.paste-saferc.json` from the current folder, falling back to `~/.paste-saferc.json`.
@@ -114,9 +150,16 @@ Known-safe values are ignored: `127.0.0.1`, `0.0.0.0`, `localhost`, semver (`v1.
 
 - `customRules` — extra patterns, applied after the built-in rules and before PII.
 - `allowlist` — exact strings or regexes that are never redacted.
-- `vaultTtlMinutes` — vault lifetime in minutes (default `60`).
+- `vaultTtlMinutes` — vault lifetime in minutes (default `60`), counted from the last sanitize.
 
 Invalid JSON or an invalid `customRules` regex prints a clear error and exits non-zero instead of silently doing the wrong thing. An `allowlist` entry that is not a valid regex is matched literally.
+
+## Security & Trust
+
+- **100% offline.** No network calls, no telemetry, no accounts. Detection is deterministic regex matching; nothing is sent anywhere.
+- **The vault stores originals in plaintext.** `~/.paste-safe/last-map.json` holds the placeholder → original mapping in clear text so `restore` can work. It is created with `0o600` / `0o700` on macOS and Linux, and it deletes itself after the TTL. If that is not acceptable, use `--no-vault` and never write it.
+- **Zero-disk mode.** `paste-safe --no-vault` never writes the mapping; redaction is one-way.
+- **Preview-safe.** `--dry-run` and `--check` only ever print masked values (`sk_l...ABCD`), so your shell history stays clean.
 
 ## Headless / SSH / WSL
 
@@ -133,10 +176,12 @@ sudo apt install wl-clipboard               # Wayland
 ```bash
 npm install
 npm run typecheck
-npm test
+npm test        # builds, then runs unit + CLI integration tests
 npm run build
 ```
 
+Issues and pull requests are welcome — please read [SECURITY.md](SECURITY.md) before reporting a detection bypass.
+
 ## License
 
-[MIT](LICENSE)
+[MIT](LICENSE) © Purushottam Kumar

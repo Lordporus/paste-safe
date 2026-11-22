@@ -1,4 +1,4 @@
-import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, readFileSync, rmdirSync, rmSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
@@ -107,6 +107,11 @@ export function clearVault(dir = defaultVaultDir()): boolean {
   const file = vaultPath(dir);
   if (!existsSync(file)) return false;
   rmSync(file, { force: true });
+  try {
+    rmdirSync(dir);
+  } catch {
+    /* leave the directory when something else lives in it */
+  }
   return true;
 }
 

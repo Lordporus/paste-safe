@@ -31,12 +31,13 @@
   "bugs": {
     "url": "https://github.com/Lordporus/paste-safe/issues"
   },
-  "author": "Lordporus",
+  "author": "Purushottam Kumar",
   "publishConfig": {
     "access": "public"
   },
   "scripts": {
     "build": "tsup",
+    "pretest": "npm run build",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "prepublishOnly": "npm run typecheck && npm test && npm run build"

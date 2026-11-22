@@ -9,6 +9,19 @@ describe('detector: secrets', () => {
     expect(redact(`before\n${key}\nafter`).text).toBe('before\n<PRIVATE_KEY_1>\nafter');
   });
 
+  it('stays fast on many unterminated private-key headers', () => {
+    const text = `${'-----BEGIN RSA PRIVATE KEY-----\n'.repeat(500)}${'x'.repeat(1_000_000)}`;
+    const started = Date.now();
+    expect(redact(text).findings).toHaveLength(0);
+    expect(Date.now() - started).toBeLessThan(3000);
+  });
+
+  it('redacts an escaped-quote .env value without corrupting it', () => {
+    const res = redact('PASSWORD="a\\"b"');
+    expect(res.text).toBe('PASSWORD="<ENV_SECRET_1>"');
+    expect(res.map['<ENV_SECRET_1>']).toBe('a\\"b');
+  });
+
   it('redacts every credentialed database / broker URI scheme', () => {
     for (const scheme of ['postgres', 'postgresql', 'mongodb', 'mongodb+srv', 'redis', 'rediss', 'mysql', 'amqp']) {
       const uri = `${scheme}://user:pass@db.internal:5432/app`;

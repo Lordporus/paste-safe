@@ -1,0 +1,91 @@
+<!doctype html>
+<!-- Frame source for demo.gif. Regenerate with:
+     chrome --headless --disable-gpu --hide-scrollbars --force-device-scale-factor=2 \
+       --window-size=880,560 --screenshot=f1.png "file:///<repo>/demo/card.html#1"
+     (repeat for #2, #3) then join the PNGs with ffmpeg -f concat. -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      body {
+        width: 880px; height: 560px; overflow: hidden;
+        background: #0b0f17;
+        display: grid; place-items: center;
+        font: 15px/1.65 "Cascadia Code", Consolas, "Courier New", monospace;
+      }
+      .term {
+        width: 800px; background: #12171f; border: 1px solid #263041;
+        border-radius: 10px; overflow: hidden; box-shadow: 0 20px 60px #0008;
+      }
+      .bar { height: 34px; background: #1a212c; display: flex; align-items: center; gap: 7px; padding: 0 14px; }
+      .dot { width: 11px; height: 11px; border-radius: 50%; }
+      .r { background: #ff5f57; } .y { background: #febc2e; } .g { background: #28c840; }
+      .name { margin-left: 10px; color: #6b7a90; font-size: 12px; }
+      pre { padding: 22px 24px 26px; color: #c8d3e0; white-space: pre; }
+      .p { color: #4ade80; }          /* prompt */
+      .c { color: #e6edf6; }          /* command */
+      .s { color: #67e8f9; }          /* placeholder */
+      .d { color: #7d8b9f; }          /* dim */
+      .ok { color: #4ade80; }
+      .hl { color: #fca5a5; }         /* secret */
+      .gap { display: block; height: 16px; }
+    </style>
+  </head>
+  <body>
+    <div class="term">
+      <div class="bar">
+        <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+        <span class="name">paste-safe — demo</span>
+      </div>
+      <pre id="out"></pre>
+    </div>
+    <script>
+      const steps = {
+        1: [
+          ['p', '$ '], ['c', 'Get-Content demo.env'],
+          ['br'],
+          ['hl', 'DATABASE_URL=postgres://admin:s3cr3t@10.0.0.5:5432/prod'],
+          ['br'],
+          ['hl', 'PASSWORD=hunter2hunter2'],
+          ['br'],
+          ['hl', 'SUPPORT_EMAIL=jane.doe@acme.io'],
+        ],
+        2: [
+          ['p', '$ '], ['c', 'Get-Content demo.env | paste-safe --stdin'],
+          ['br'],
+          ['c', 'DATABASE_URL='], ['s', '<DB_URI_1>'],
+          ['br'],
+          ['c', 'PASSWORD='], ['s', '<ENV_SECRET_1>'],
+          ['br'],
+          ['c', 'SUPPORT_EMAIL='], ['s', '<EMAIL_1>'],
+          ['gap'],
+          ['ok', '✔ 3 matches redacted → stdout'],
+          ['br'],
+          ['d', 'saved ~/.paste-safe/last-map.json (60m) · undo with paste-safe restore'],
+        ],
+        3: [
+          ['p', '$ '], ['c', 'paste-safe restore'],
+          ['br'],
+          ['c', 'DATABASE_URL=postgres://admin:s3cr3t@10.0.0.5:5432/prod'],
+          ['br'],
+          ['c', 'PASSWORD=hunter2hunter2'],
+          ['br'],
+          ['c', 'SUPPORT_EMAIL=jane.doe@acme.io'],
+          ['gap'],
+          ['ok', '✔ restored → clipboard'],
+        ],
+      };
+      const step = steps[location.hash.slice(1)] || steps[1];
+      const out = document.getElementById('out');
+      for (const [cls, text] of step) {
+        if (cls === 'br') { out.append(document.createElement('br')); continue; }
+        if (cls === 'gap') { const s = document.createElement('span'); s.className = 'gap'; out.append(s); continue; }
+        const span = document.createElement('span');
+        span.className = cls;
+        span.textContent = text;
+        out.append(span);
+      }
+    </script>
+  </body>
+</html>

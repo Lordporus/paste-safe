@@ -71,7 +71,9 @@ async function writeClipboard(text: string): Promise<void> {
 }
 
 function writeStdout(text: string): void {
-  process.stdout.write(text.endsWith('\n') ? text : `${text}\n`);
+  // Byte-exact when piped; only a terminal gets the courtesy newline.
+  process.stdout.write(text);
+  if (process.stdout.isTTY) process.stdout.write('\n');
 }
 
 interface SummaryContext {
@@ -129,7 +131,8 @@ function renderJson(res: RedactResult, ctx: SummaryContext): string {
 async function sanitizeCommand(o: GlobalOptions): Promise<void> {
   const config = loadConfig();
   const useStdin = Boolean(o.stdin) || !process.stdin.isTTY;
-  const dryRun = Boolean(o.dryRun);
+  // --check is a probe: it must never rewrite the clipboard, the vault, or stdout.
+  const dryRun = Boolean(o.dryRun) || Boolean(o.check);
   const vaultOff = o.vault === false;
 
   const text = useStdin ? await readStdin() : await readClipboard();
@@ -179,6 +182,11 @@ async function restoreCommand(o: GlobalOptions): Promise<void> {
   const read = readVault();
   const log = useStdin ? process.stderr : process.stdout;
 
+  if (!/<[A-Z0-9_]+_\d+>/.test(text)) {
+    log.write(pc.dim('paste-safe: nothing to restore — no placeholders in the input\n'));
+    return;
+  }
+
   if (read.status !== 'ok') {
     const reason =
       read.status === 'missing'
@@ -208,6 +216,13 @@ async function restoreCommand(o: GlobalOptions): Promise<void> {
 }
 
 async function watchCommand(o: GlobalOptions): Promise<void> {
+  if (o.dryRun || o.check) {
+    process.stderr.write(
+      `${pc.yellow('paste-safe:')} watch rewrites the clipboard, so --dry-run and --check do not apply\n`,
+    );
+    process.exitCode = 1;
+    return;
+  }
   const config = loadConfig();
   const vaultOff = o.vault === false;
   // Prime with what is already on the clipboard so starting watch does not rewrite it.
@@ -307,7 +322,7 @@ program
   .option('--dry-run', 'preview detections with masked values; never touch the clipboard or disk')
   .option('--no-pii', 'redact secrets only; keep emails and IPs')
   .option('--no-vault', 'one-way redaction; never write the vault')
-  .option('--check', 'exit 1 when anything is detected')
+  .option('--check', 'report only (no clipboard or vault writes); exit 1 when anything is detected')
   .option('--json', 'print a JSON summary')
   .option('--stdin', 'force reading stdin and writing stdout');
 
@@ -315,11 +330,16 @@ program
   .command('restore')
   .description('restore placeholders using the local vault')
   .option('--force', 'restore even if the text was not produced by the current vault')
+  .addHelpText(
+    'after',
+    '\nReads the clipboard (stdin when piped or with --stdin) and writes the same way.\n--json only affects the sanitize command.\n',
+  )
   .action((_opts: unknown, cmd: Command) => run(restoreCommand, cmd));
 
 program
   .command('watch')
   .description('poll the clipboard and sanitize secrets in place')
+  .addHelpText('after', '\nAlways reads and writes the clipboard (never stdin). --no-pii and --no-vault apply.\n')
   .action((_opts: unknown, cmd: Command) => run(watchCommand, cmd));
 
 program.command('clear').description('delete the local vault').action(() => run(clearCommand, program));

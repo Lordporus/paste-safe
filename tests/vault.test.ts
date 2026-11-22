@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -53,6 +53,13 @@ describe('vault', () => {
     expect(clearVault(dir)).toBe(true);
     expect(clearVault(dir)).toBe(false);
     expect(readVault(dir).status).toBe('missing');
+  });
+
+  it('removes the vault directory once it is empty', () => {
+    const dir = tempDir();
+    saveVault({ '<IP_1>': '10.0.0.5' }, 60, dir);
+    clearVault(dir);
+    expect(existsSync(dir)).toBe(false);
   });
 
   it('writes a vault file with the expected shape', () => {

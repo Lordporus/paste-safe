@@ -59,10 +59,11 @@ interface Hit {
 }
 
 const BASE_RULES: Rule[] = [
-  // 1. Private key blocks
+  // 1. Private key blocks. The body is bounded so an unterminated BEGIN marker
+  // cannot make the lazy scan walk to end-of-input once per marker (quadratic).
   {
     name: 'PRIVATE_KEY',
-    re: /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/g,
+    re: /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]{0,65536}?-----END [A-Z ]*PRIVATE KEY-----/g,
   },
   // 2. Database / broker URIs with credentials
   {
@@ -97,7 +98,11 @@ const BASE_RULES: Rule[] = [
   // 6. .env-style assignments (key + `=` preserved)
   {
     name: 'ENV_SECRET',
-    re: /([A-Za-z0-9_.-]*(?:SECRET|TOKEN|PASSWD|PASSWORD|API_KEY|PRIVATE_KEY|ACCESS_KEY|AUTH)[A-Za-z0-9_.-]*[ \t]*=[ \t]*)(?:"([^"\n]*)"|'([^'\n]*)'|([^\s]+))/g,
+    // Double-quoted values may contain escaped characters (PASSWORD="a\"b"), so the
+    // quoted branch steps over backslash pairs instead of stopping at the first quote.
+    // The key name is anchored to a word boundary and length-bounded: an unbounded
+    // [A-Za-z0-9_.-]* here retries at every character of a long token and goes quadratic.
+    re: /\b([A-Za-z0-9_.-]{0,64}(?:SECRET|TOKEN|PASSWD|PASSWORD|API_KEY|PRIVATE_KEY|ACCESS_KEY|AUTH)[A-Za-z0-9_.-]{0,64}[ \t]*=[ \t]*)(?:"((?:[^"\\\n]|\\.)*)"|'([^'\n]*)'|([^\s]+))/g,
     raw: (m) => envParts(m).raw,
     prefix: (m) => (m[1] ?? '') + envParts(m).quote,
     suffix: (m) => envParts(m).quote + envParts(m).sep,
