@@ -1,0 +1,36 @@
+name: Bug report
+description: A secret was missed, a value was restored wrong, or the tool crashed
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Do not paste a real secret.** Replace it with an obvious fake that keeps the same shape.
+  - type: textarea
+    id: input
+    attributes:
+      label: Input that reproduces it
+      description: The smallest text that triggers the problem, with secrets masked.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected instead
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: paste-safe version
+      description: Output of `paste-safe --version`.
+    validations:
+      required: true
+  - type: input
+    id: env
+    attributes:
+      label: OS and Node version
+      placeholder: Windows 11, Node 22.11.0
+    validations:
+      required: true
